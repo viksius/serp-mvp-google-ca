@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SERP-отчёт: площадки для размещения</title>
+<style>
+:root{--bg:#f5f6f8;--card:#fff;--text:#1b2330;--mut:#6a7585;--line:#e3e7ed;--acc:#2563eb;
+--ok:#15803d;--okbg:#dcfce7;--no:#667085;--nobg:#eceff3;--warn:#a15c07;--warnbg:#fef0c7;--bad:#b42318;--chip:#eef2ff;--chipt:#3730a3}
+@media(prefers-color-scheme:dark){:root{--bg:#0e1217;--card:#161b22;--text:#e7eaf0;--mut:#8b96a6;--line:#262d38;--acc:#7aa7ff;
+--ok:#4ade80;--okbg:#10301e;--no:#8b96a6;--nobg:#212833;--warn:#fbbf24;--warnbg:#3a2c0b;--bad:#f87171;--chip:#1e2540;--chipt:#b4c0ff}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:1500px;margin:0 auto;padding:20px 16px 60px}
+h1{font-size:20px;margin:0 0 2px}
+.sub{color:var(--mut);font-size:12px}
+.demo{background:var(--warnbg);color:var(--warn);padding:8px 12px;border-radius:8px;margin:10px 0;font-weight:600}
+.stats{display:flex;gap:10px;flex-wrap:wrap;margin:14px 0}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 16px;min-width:130px}
+.stat b{display:block;font-size:22px}
+.tabs{display:flex;gap:6px;margin:6px 0 12px}
+.tab{border:1px solid var(--line);background:var(--card);color:var(--text);padding:7px 14px;border-radius:8px;cursor:pointer;font:inherit}
+.tab.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+.bar{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.bar input[type=search],.bar select{padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--text);font:inherit}
+.bar input[type=search]{min-width:240px}
+.bar label{display:flex;gap:5px;align-items:center;cursor:pointer;user-select:none}
+.tblwrap{background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:auto}
+table{border-collapse:collapse;width:100%}
+th,td{padding:9px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{position:sticky;top:0;background:var(--card);font-size:12px;color:var(--mut);cursor:pointer;white-space:nowrap;user-select:none}
+th.nosort{cursor:default}
+tr:hover td{background:color-mix(in srgb,var(--acc) 5%,transparent)}
+a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
+.dom{font-weight:600}
+.small{font-size:12px;color:var(--mut);margin-top:2px;max-width:420px}
+.badge{display:inline-block;padding:2px 9px;border-radius:99px;font-size:12px;font-weight:600;white-space:nowrap}
+.b-ok{background:var(--okbg);color:var(--ok)}.b-no{background:var(--nobg);color:var(--no)}.b-warn{background:var(--warnbg);color:var(--warn)}
+.chip{display:inline-block;background:var(--chip);color:var(--chipt);padding:1px 8px;margin:1px 3px 1px 0;border-radius:6px;font-size:12px;white-space:nowrap}
+.pos{font-weight:700;font-variant-numeric:tabular-nums}
+.up{color:var(--ok)}.down{color:var(--bad)}
+.empty{padding:30px;text-align:center;color:var(--mut)}
+td.num,th.num{text-align:center}
+.path{display:block;color:var(--mut);font-weight:400;font-size:12px;word-break:break-all}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>SERP-отчёт: площадки для размещения</h1>
+  <div class="sub" id="meta"></div>
+  <div id="demo"></div>
+  <div class="stats" id="stats"></div>
+  <div class="tabs">
+    <button class="tab on" data-tab="sites">Площадки</button>
+    <button class="tab" data-tab="hist">История позиций</button>
+  </div>
+  <div class="bar">
+    <input type="search" id="q" placeholder="Поиск: домен, бренд, ключ…">
+    <label><input type="checkbox" id="onlyRel" checked> Только релевантные</label>
+    <label id="lblContact"><input type="checkbox" id="hasContact"> Только с контактом</label>
+    <label id="lblBrands"><input type="checkbox" id="hasBrands"> Только с брендами</label>
+    <select id="cat"><option value="">Все категории</option></select>
+    <select id="kw"><option value="">Все ключи</option></select>
+  </div>
+  <div class="tblwrap"><table id="tbl"></table></div>
+</div>
+<script>
+function pathOf(u){try{const x=new URL(u);const p=x.pathname+x.search;return p==='/'?'':p}catch(e){return ''}}
+const D = __DATA__;
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const CAT = {review_rating:'Обзор / рейтинг', blog_news:'Блог / новости', operator:'Казино (оператор)',
+             encyclopedia:'Энциклопедия / гос.', forum_social:'Форум / соцсети', other:'Другое'};
+let tab = 'sites', sort = {k: null, d: 1};
+const byUrl = Object.fromEntries(D.sites.map(s => [s.url, s]));
+
+$('#meta').textContent = 'Данные за ' + D.run_date + ' · Google.ca · mobile · EN · топ-10';
+if (D.demo) $('#demo').innerHTML = '<div class="demo">ДЕМО-ДАННЫЕ: вымышленные сайты, только чтобы показать вид отчёта</div>';
+// If the AI step has not (fully) run, never show an empty table: show everything and say why.
+const unlabeled = D.sites.filter(s => !s.relevant).length;
+if (unlabeled) {
+  const none = unlabeled === D.sites.length;
+  $('#demo').insertAdjacentHTML('beforeend', `<div class="demo">${none
+    ? 'ИИ-разметка ещё не выполнена: показаны все результаты выдачи без оценки релевантности. Запустите run.py ещё раз.'
+    : `У ${unlabeled} из ${D.sites.length} URL нет ИИ-разметки (сбой или лимит). Они помечены «нет разметки»; запустите run.py ещё раз.`}</div>`);
+  if (none) { $('#onlyRel').checked = false; $('#onlyRel').disabled = true; }
+}
+Object.entries(CAT).forEach(([k, v]) => $('#cat').insertAdjacentHTML('beforeend', `<option value="${k}">${esc(v)}</option>`));
+[...new Set(D.matrix.map(m => m.keyword))].sort().forEach(k => $('#kw').insertAdjacentHTML('beforeend', `<option>${esc(k)}</option>`));
+
+const NO_CONTACT = 'Не подтверждён';
+const hasC = s => s.contact && s.contact !== NO_CONTACT;
+function contactHtml(c, other) {
+  if (!c) return '<span class="sub">—</span>';
+  if (c === NO_CONTACT) return `<span class="badge b-warn">${NO_CONTACT}</span>` + (other ? `<div class="small" title="Найдено на странице, но ИИ не подтвердил как контакт для сотрудничества">кандидаты: ${esc(other.slice(0, 70))}</div>` : '');
+  if (/^https?:\/\//i.test(c)) return `<a href="${esc(c)}" target="_blank" rel="noopener">страница контактов</a><div class="small">${esc(c.replace(/^https?:\/\//, '').slice(0, 50))}</div>`;
+  return `<a href="mailto:${esc(c)}">${esc(c)}</a>`;
+}
+const relBadge = s => s.relevant === 'yes' ? '<span class="badge b-ok">Да</span>'
+  : s.relevant === 'no' ? '<span class="badge b-no">Нет</span>' : '<span class="badge b-warn">нет разметки</span>';
+
+function filteredSites() {
+  const q = $('#q').value.trim().toLowerCase(), cat = $('#cat').value, kw = $('#kw').value;
+  let rows = D.sites.filter(s =>
+    (!$('#onlyRel').checked || s.relevant === 'yes') &&
+    (!$('#hasContact').checked || hasC(s)) &&
+    (!$('#hasBrands').checked || s.brands) &&
+    (!cat || s.category === cat) &&
+    (!kw || s._kw.some(x => x[0] === kw)) &&
+    (!q || (s.domain + ' ' + s.title + ' ' + s.brands + ' ' + s.keywords).toLowerCase().includes(q)));
+  const key = sort.k;
+  rows.sort((a, b) => {
+    if (!key) return (a.relevant !== 'yes') - (b.relevant !== 'yes') || a.best_position - b.best_position || a.domain.localeCompare(b.domain);
+    const x = a[key], y = b[key];
+    const r = typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y));
+    return r * sort.d;
+  });
+  return rows;
+}
+
+function renderSites() {
+  const all = D.sites, rel = all.filter(s => s.relevant === 'yes');
+  $('#stats').innerHTML = [['Всего URL', all.length], ['Релевантных', rel.length],
+    ['Релевантных с контактом', rel.filter(hasC).length],
+    ['Релевантных с брендами', rel.filter(s => s.brands).length]]
+    .map(([t, n]) => `<div class="stat"><b>${n}</b><span class="sub">${t}</span></div>`).join('');
+  const rows = filteredSites();
+  const head = [['domain','Сайт'],['relevant','Релевантен'],['category','Категория'],['brands','Бренды на странице'],
+    ['contact','Контакт'],['best_position','Лучшая поз.'],['keywords','Ключи и позиции'],['confidence','Надёжность']];
+  const arrow = k => sort.k === k ? (sort.d > 0 ? ' ▲' : ' ▼') : '';
+  let h = '<thead><tr>' + head.map(([k, t]) => `<th data-k="${k}" class="${k === 'best_position' ? 'num' : ''}">${t}${arrow(k)}</th>`).join('') + '</tr></thead><tbody>';
+  if (!rows.length) h += `<tr><td colspan="8" class="empty">Нет строк под выбранные фильтры</td></tr>`;
+  rows.forEach(s => {
+    const brands = s.brands ? s.brands.split('; ').map(b => `<span class="chip">${esc(b)}</span>`).join('') : '<span class="sub">—</span>';
+    const kws = s._kw.map(([k, p]) => `<span class="chip">${esc(k)} <b>#${p}</b></span>`).join('');
+    const conf = s.basis === 'snippet' ? '<span class="badge b-warn" title="Сайт не скачался (защита от ботов), оценка только по заголовку и сниппету">по сниппету</span>'
+      : s.basis === 'rule' ? '<span class="sub">по правилу</span>'
+      : s.confidence === 'low' ? '<span class="badge b-warn">низкая</span>' : `<span class="sub">${esc({high:'высокая',medium:'средняя'}[s.confidence] || '')}</span>`;
+    h += `<tr><td><a class="dom" href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.domain)}<span class="path">${esc(pathOf(s.url))}</span></a><div class="small">${esc(s.title)}</div></td>
+      <td>${relBadge(s)}</td><td>${esc(CAT[s.category] || s.category)}<div class="small">${esc(s.reason)}</div></td>
+      <td>${brands}</td><td>${contactHtml(s.contact, s.other_contacts)}</td><td class="num pos">${s.best_position}</td><td>${kws}</td><td>${conf}</td></tr>`;
+  });
+  $('#tbl').innerHTML = h + '</tbody>';
+}
+
+function renderHist() {
+  const q = $('#q').value.trim().toLowerCase(), kw = $('#kw').value;
+  const dates = [...D.dates].reverse();           // newest first
+  let rows = D.matrix.filter(m => {
+    const s = byUrl[m.url];
+    return (!kw || m.keyword === kw) && (!$('#onlyRel').checked || (s && s.relevant === 'yes')) &&
+      (!q || (m.domain + ' ' + m.keyword).toLowerCase().includes(q));
+  });
+  const latest = m => { const d = dates.find(d => m[d] != null); return d ? m[d] : 99; };
+  rows.sort((a, b) => a.keyword.localeCompare(b.keyword) || latest(a) - latest(b));
+  $('#stats').innerHTML = `<div class="stat"><b>${D.dates.length}</b><span class="sub">дней в истории</span></div>
+    <div class="stat"><b>${rows.length}</b><span class="sub">строк (ключ × URL)</span></div>`;
+  let h = '<thead><tr><th class="nosort">Ключ</th><th class="nosort">Сайт</th><th class="nosort">Релевантен</th>' +
+    dates.map(d => `<th class="nosort num">${d}</th>`).join('') + '</tr></thead><tbody>';
+  if (!rows.length) h += `<tr><td colspan="${3 + dates.length}" class="empty">Нет строк под выбранные фильтры</td></tr>`;
+  rows.forEach(m => {
+    const s = byUrl[m.url] || {};
+    h += `<tr><td>${esc(m.keyword)}</td><td><a href="${esc(m.url)}" target="_blank" rel="noopener" class="dom">${esc(m.domain)}<span class="path">${esc(pathOf(m.url))}</span></a></td><td>${relBadge(s)}</td>`;
+    dates.forEach((d, i) => {
+      const p = m[d];
+      if (p == null) { h += '<td class="num sub">—</td>'; return; }
+      const prevDate = dates.slice(i + 1).find(x => m[x] != null);
+      let delta = '';
+      if (prevDate) { const df = m[prevDate] - p; if (df > 0) delta = ` <span class="up">▲${df}</span>`; else if (df < 0) delta = ` <span class="down">▼${-df}</span>`; }
+      h += `<td class="num pos">${p}${delta}</td>`;
+    });
+    h += '</tr>';
+  });
+  $('#tbl').innerHTML = h + '</tbody>';
+}
+
+function render() {
+  const sites = tab === 'sites';
+  ['lblContact', 'lblBrands'].forEach(id => $('#' + id).style.display = sites ? '' : 'none');
+  $('#cat').style.display = sites ? '' : 'none';
+  sites ? renderSites() : renderHist();
+}
+document.querySelectorAll('.tab').forEach(b => b.onclick = () => {
+  tab = b.dataset.tab; document.querySelectorAll('.tab').forEach(x => x.classList.toggle('on', x === b)); render();
+});
+['q', 'onlyRel', 'hasContact', 'hasBrands', 'cat', 'kw'].forEach(id => $('#' + id).addEventListener('input', render));
+$('#tbl').addEventListener('click', e => {
+  const th = e.target.closest('th[data-k]'); if (!th) return;
+  const k = th.dataset.k; sort = sort.k === k ? {k, d: -sort.d} : {k, d: 1}; render();
+});
+render();
+</script>
+</body>
+</html>
